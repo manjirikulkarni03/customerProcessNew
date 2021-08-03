@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+	
+	<sub-flow name="VarSubFlow" doc:id="21238389-b953-4b91-9c7d-eaddb91de7c3" >
+		<set-variable value="#[payload.OrderID]" doc:name="Set Variable" doc:id="9c9cda6d-a960-4cfe-a6f0-7d7a1896927c" variableName="OrderID"/>
+		<set-variable value="#[payload.ComplaintDesc]" doc:name="Set Variable" doc:id="1dd7aade-d88f-48c9-a9e2-a0c5b77ec290" variableName="ComplaintDesc"/>
+		<set-variable value="#[payload.ComplaintStatus]" doc:name="Set Variable" doc:id="27c4ba99-f5b0-4f9c-84cf-8cd2d2f2285a" variableName="ComplaintStatus"/>
+	</sub-flow>
+	<flow name="getAllCustomerFlow" doc:id="2c70d52e-bdeb-4de5-9593-0cb0f922efcc" >
+		<os:store doc:name="Store" doc:id="e7d8dc9b-0411-4884-b650-5e15feb71e40" key="array">
+			<os:value ><![CDATA[#[[]]]]></os:value>
+		</os:store>
+		<http:request method="GET" doc:name="Request" doc:id="0ab4e73a-5f57-47b6-a945-167710ea6021" config-ref="HTTP_Request_configuration" path="/complaints"/>
+		<foreach doc:name="For Each" doc:id="d633bb05-a8b7-4190-bae1-2c2bf9c117d6" >
+			<set-variable value="#[payload.CustID]" doc:name="CustID" doc:id="8316ebfd-f67c-4647-a120-35b6c2a27d79" variableName="CustID"/>
+			<ee:transform doc:name="Complaints Var" doc:id="283e3ca6-06b0-4a8d-830b-732868821c5d" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+				</ee:message>
+				<ee:variables >
+					<ee:set-variable variableName="complaint" ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	 ComplaintID: payload.ComplaintID,
+     OrderID: payload.OrderID,
+     ComplaintDesc: payload.ComplaintDesc,
+     ComplaintStatus: payload.ComplaintStatus
+}]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<http:request method="GET" doc:name="Customer Request" doc:id="d011a02e-5469-4fe9-839b-895693857e93" config-ref="HTTP_Request_configuration" url="http://customer-proxy-s.us-e2.cloudhub.io/customer/{CustID}">
+				<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	CustID : vars.CustID
+}]]]></http:uri-params>
+			</http:request>
+			<ee:transform doc:name="Customer Var" doc:id="66606229-707f-4d2b-8256-0ff0d7ac971f" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+}]]></ee:set-payload>
+				</ee:message>
+				<ee:variables >
+					<ee:set-variable variableName="customer" ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	ID: payload.CustID[0],
+	Name: payload.CustName[0],
+	Mail: payload.CustMail[0]
+}]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<ee:transform doc:name="Result var" doc:id="115f0bee-feb1-4c66-bd54-bd8460b0a93f" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+{
+}]]></ee:set-payload>
+				</ee:message>
+				<ee:variables >
+					<ee:set-variable variableName="result" ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	CompliantID: vars.complaint.ComplaintID,
+	OrderID: vars.complaint.OrderID,
+	ComplaintDesc: vars.complaint.ComplaintDesc,
+	ComplaintStatus: vars.complaint.ComplaintStatus,
+	CustomerDetails: vars.customer
+}]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<os:retrieve doc:name="Retrieve" doc:id="492afbc0-4f98-4272-914a-48f69cae0c97" key="array"/>
+			<ee:transform doc:name="Transform Message" doc:id="729ca287-6b20-4df0-b5ab-1682b7ba2ca7" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<os:store doc:name="Store" doc:id="79311c39-0169-4b80-9383-40e9dd4feb01" key="array">
+				<os:value ><![CDATA[#[payload + vars.result]]]></os:value>
+			</os:store>
+		</foreach>
+		<os:retrieve doc:name="Retrieve" doc:id="ed0c315f-30d8-4285-b05d-eea902911246" key="array"/>
+	</flow>
+	<flow name="getCustomerByIDFlow" doc:id="17847227-3cd7-4d94-981a-170f1ce355c9" >
+		<os:store doc:name="Empty Array" doc:id="95534998-76cc-4793-9a03-b85fcaa76395" key="array">
+			<os:value ><![CDATA[#[[]]]]></os:value>
+		</os:store>
+		<http:request method="GET" doc:name="Complaints Request" doc:id="475b8025-776b-4027-ad98-76b08c224021" config-ref="HTTP_Request_configuration" path="/complaints/{Id}">
+			<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	Id : attributes.uriParams.Id
+}]]]></http:uri-params>
+		</http:request>
+		<foreach doc:name="For Each" doc:id="f7c53a81-0eaa-491f-8f00-db5a9c2b5ee0" >
+			<set-variable value="#[payload.CustID]" doc:name="CustID" doc:id="503d35fd-dc48-4b69-ab6b-146d0e79262f" variableName="CustID"/>
+			<ee:transform doc:name="Complaints Variable" doc:id="19e8d803-e73a-4e64-ba18-2b9c307884c0">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+				<ee:variables >
+					<ee:set-variable variableName="comp" ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	 ComplaintID: payload.ComplaintID,
+     OrderID: payload.OrderID,
+     ComplaintDesc: payload.ComplaintDesc,
+     ComplaintStatus: payload.ComplaintStatus
+}]]></ee:set-variable>
+				</ee:variables>
+		</ee:transform>
+			<http:request method="GET" doc:name="customer Variable" doc:id="391a8f3b-a57d-4a77-ba8c-e9e1c2559807" config-ref="HTTP_Request_configuration" url="http://customer-proxy-s.us-e2.cloudhub.io/customer/{CustID}">
+				<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	CustID : vars.CustID
+}]]]></http:uri-params>
+			</http:request>
+			<ee:transform doc:name="Customer Variable" doc:id="e294be79-3864-485e-afa9-0b919ae8b78a" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+{
+}]]></ee:set-payload>
+				</ee:message>
+				<ee:variables >
+					<ee:set-variable variableName="Customer" ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	ID: payload.CustID[0],
+	Name: payload.CustName[0],
+	Mail: payload.CustMail[0]
+}]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<ee:transform doc:name="result var" doc:id="b18ddfeb-6c00-41dd-87b7-b0d733c8d678" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+{
+}]]></ee:set-payload>
+				</ee:message>
+				<ee:variables >
+					<ee:set-variable variableName="result" ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	ComplaintID: vars.comp.ComplaintID,
+	OrderID: vars.comp.OrderID,
+	ComplaintDesc: vars.comp.ComplaintDesc,
+	ComplaintStatus: vars.comp.ComplaintStatus,
+	CustomerDetails: vars.Customer
+}]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<os:retrieve doc:name="Retrieve" doc:id="2f726f09-0a58-4558-bd3b-dbb1fdd6cb3c" key="array"/>
+			<ee:transform doc:name="Transform Message" doc:id="7a15db5c-c3be-4767-a358-fc02647d2af8" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<os:store doc:name="Store" doc:id="576a4c22-f5b9-4598-8b83-0f6aa774fcbe" key="array">
+				<os:value ><![CDATA[#[payload + vars.result]]]></os:value>
+			</os:store>
+		</foreach>
+		<os:retrieve doc:name="Retrieve" doc:id="4d021567-25d5-4396-ab03-8bbbce120090" key="array"/>
+	</flow>
+	<flow name="postFlow" doc:id="88204d68-7f9b-449d-a90d-8411b66ed953" >
+		<flow-ref doc:name="Flow Reference" doc:id="4efa908a-e4ca-4967-bb7c-b0ec0ec1446e" name="VarSubFlow" />
+		<http:request method="POST" doc:name="Request" doc:id="0fe2104a-7dd8-467f-be51-7208e6dd5860" config-ref="HTTP_Request_configuration" path="/complaints"/>
+	</flow>
+</mule>
